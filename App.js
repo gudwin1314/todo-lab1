@@ -1,29 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Button, FlatList, Switch, TouchableWithoutFeedback } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { styles } from './style'; 
+import { db } from './database';
+import { collection, addDoc, onSnapshot, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 
 const App = () => {
   const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState('');
 
-  const addTask = () => {
+  useEffect(() => {
+    const database = onSnapshot(collection(db, 'ToDo-List'), (snapshot) => {
+      const newTasks = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+        
+      }));
+      setTasks(newTasks);
+    });
+
+    return () => database();
+  }, []);
+
+  const addTask = async () => {
     if (title.trim()) {
-      setTasks([...tasks, { title, status: false }]);
+      await addDoc(collection(db, 'ToDo-List'), {
+        title,
+        status: false
+      });
       setTitle('');
     }
   };
 
-  const toggleStatus = (index) => {
-    const newTasks = tasks.map((task, i) =>
-      i === index ? { ...task, status: !task.status } : task
-    );
-    setTasks(newTasks);
+  const toggleStatus = async (id, status) => {
+    const taskDoc = doc(db, 'ToDo-List', id);
+    await updateDoc(taskDoc, {
+      status: !status
+    });
   };
 
-  const deleteTask = (index) => {
-    const newTasks = tasks.filter((_, i) => i !== index);
-    setTasks(newTasks);
+  const deleteTask = async (id) => {
+    const taskDoc = doc(db, 'ToDo-List', id);
+    await deleteDoc(taskDoc);
   };
 
   return (
@@ -31,7 +49,7 @@ const App = () => {
       <Text style={styles.header}>ToDo-List</Text>
       <FlatList
         data={tasks}
-        renderItem={({ item, index }) => (
+        renderItem={({ item }) => (
           <View style={styles.taskItem}>
             <Text style={styles.taskText}>
               {item.title}
@@ -39,18 +57,18 @@ const App = () => {
             <View style={styles.switchContainer}>
               <Switch
                 value={item.status}
-                onValueChange={() => toggleStatus(index)}
+                onValueChange={() => toggleStatus(item.id, item.status)}
               />
               <Text style={item.status ? styles.statusClosed : styles.statusOpen}>
                 {item.status ? 'Done' : 'Due'}
               </Text>
             </View>
-            <TouchableWithoutFeedback onPress={() => deleteTask(index)}>
+            <TouchableWithoutFeedback onPress={() => deleteTask(item.id)}>
               <Icon name="trash" size={30} color="red" style={styles.deleteIcon} />
             </TouchableWithoutFeedback>
           </View>
         )}
-        keyExtractor={(_, index) => index.toString()}
+        keyExtractor={(item) => item.id}
       />
       <View style={styles.taskInputContainer}>
         <TextInput
